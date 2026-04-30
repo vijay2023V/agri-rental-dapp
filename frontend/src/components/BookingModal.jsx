@@ -63,7 +63,7 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       const signer = await provider.getSigner();
 
       // ✅ Step 2: Approve ERC20 token spending
-      const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS;
+      const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS; // ✅ fixed
 
       if (!tokenAddress) {
         setValidationError('Token address not configured. Check your .env file.');
@@ -157,7 +157,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
             </div>
           )}
 
-          {/* Status message */}
           {statusMsg && (
             <div className="status-message">{statusMsg}</div>
           )}

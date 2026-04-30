@@ -6,7 +6,7 @@ import '../styles/Dashboard.css';
 
 const Dashboard = ({ contractAddress, contractABI }) => {
   const { account, isConnected } = useWeb3();
-  const { call, loading } = useContract(contractAddress, contractABI);
+  const { call, write, loading } = useContract(contractAddress, contractABI);
   const [userBookings, setUserBookings] = useState([]);
   const [ownerEquipment, setOwnerEquipment] = useState([]);
   const [stats, setStats] = useState({
@@ -15,6 +15,9 @@ const Dashboard = ({ contractAddress, contractABI }) => {
     activeBookings: 0,
   });
   const [activeTab, setActiveTab] = useState('bookings');
+  const [completingId, setCompletingId] = useState(null);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (isConnected && account) {
@@ -24,7 +27,6 @@ const Dashboard = ({ contractAddress, contractABI }) => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch user bookings
       const bookings = await call('getUserBookings', account);
       const formattedBookings = bookings.map((booking) => ({
         id: Number(booking.id),
@@ -38,7 +40,6 @@ const Dashboard = ({ contractAddress, contractABI }) => {
       }));
       setUserBookings(formattedBookings);
 
-      // Fetch owner equipment
       const equipment = await call('getOwnerEquipment', account);
       const formattedEquipment = equipment.map((eq) => ({
         id: Number(eq.id),
@@ -49,7 +50,6 @@ const Dashboard = ({ contractAddress, contractABI }) => {
       }));
       setOwnerEquipment(formattedEquipment);
 
-      // Calculate stats
       setStats({
         totalBookings: formattedBookings.length,
         totalEquipment: formattedEquipment.length,
@@ -60,21 +60,55 @@ const Dashboard = ({ contractAddress, contractABI }) => {
     }
   };
 
+  // ✅ Complete booking handler
+  const handleCompleteBooking = async (bookingId, endDate) => {
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      // Check if rental period has ended
+      const now = new Date();
+      if (now < endDate) {
+        setErrorMsg(`Cannot complete yet. Rental ends on ${formatDate(endDate)}`);
+        return;
+      }
+
+      setCompletingId(bookingId);
+      const tx = await write('completeBooking', bookingId);
+
+      if (tx) {
+        setSuccessMsg(`✅ Booking #${bookingId} completed! Payment released to equipment owner.`);
+        await fetchDashboardData(); // refresh
+      }
+    } catch (err) {
+      setErrorMsg(err.reason || err.message || 'Failed to complete booking');
+      console.error('Complete booking error:', err);
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Active':
-        return 'status-active';
-      case 'Completed':
-        return 'status-completed';
-      case 'Cancelled':
-        return 'status-cancelled';
-      default:
-        return '';
+      case 'Active': return 'status-active';
+      case 'Completed': return 'status-completed';
+      case 'Cancelled': return 'status-cancelled';
+      default: return '';
     }
   };
 
   const formatDate = (date) => {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  };
+
+  // ✅ Check if booking can be completed
+  const canComplete = (booking) => {
+    return booking.status === 'Active' && new Date() >= booking.endDate;
+  };
+
+  // ✅ Check if booking end date has passed
+  const isPastEndDate = (booking) => {
+    return new Date() >= booking.endDate;
   };
 
   if (!isConnected) {
@@ -109,6 +143,14 @@ const Dashboard = ({ contractAddress, contractABI }) => {
         </div>
       </div>
 
+      {/* ✅ Success & Error messages */}
+      {successMsg && (
+        <div className="success-message">{successMsg}</div>
+      )}
+      {errorMsg && (
+        <div className="error-message">{errorMsg}</div>
+      )}
+
       <div className="dashboard-tabs">
         <button
           className={`tab-btn ${activeTab === 'bookings' ? 'active' : ''}`}
@@ -139,6 +181,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                     <th>End Date</th>
                     <th>Cost (MATIC)</th>
                     <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -152,6 +195,30 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                         <span className={`status-badge ${getStatusColor(booking.status)}`}>
                           {booking.status}
                         </span>
+                      </td>
+                      {/* ✅ Complete Booking Button */}
+                      <td>
+                        {booking.status === 'Active' && (
+                          canComplete(booking) ? (
+                            <button
+                              className="btn-complete"
+                              onClick={() => handleCompleteBooking(booking.id, booking.endDate)}
+                              disabled={completingId === booking.id}
+                            >
+                              {completingId === booking.id ? '⏳ Processing...' : '✅ Complete'}
+                            </button>
+                          ) : (
+                            <span className="pending-label">
+                              ⏳ Ends {booking.endDate.toLocaleDateString()}
+                            </span>
+                          )
+                        )}
+                        {booking.status === 'Completed' && (
+                          <span className="done-label">💰 Paid</span>
+                        )}
+                        {booking.status === 'Cancelled' && (
+                          <span className="cancelled-label">❌ Cancelled</span>
+                        )}
                       </td>
                     </tr>
                   ))}
