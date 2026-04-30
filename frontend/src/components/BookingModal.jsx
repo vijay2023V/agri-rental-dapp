@@ -42,8 +42,8 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
-      const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+      const startTimestamp = Math.floor(new Date(startDate + 'T12:00:00').getTime() / 1000);
+      const endTimestamp = Math.floor(new Date(endDate + 'T12:00:00').getTime() / 1000);
 
       if (endTimestamp <= startTimestamp) {
         setValidationError('End date must be after start date');
@@ -69,8 +69,9 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
   };
 
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().split('T')[0];
   };
 
   return (
