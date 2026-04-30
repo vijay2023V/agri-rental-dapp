@@ -409,14 +409,14 @@ Contributions are welcome! Please follow these steps:
 
 ## 📝 License
 
-This project is licensed under the MIT License - see LICENSE file for details.
+This project is licensed under the no License - see file for details.
 
 ---
 
 ## 👥 Authors
 
 - **Your Name** - Initial work
-- GitHub: [@yourusername](https://github.com/yourusername)
+- GitHub: https://github.com/vijay2023V
 
 ---
 
@@ -424,16 +424,6 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 For support, email support@farmequip.com or open an issue on GitHub.
 
----
 
-## 🎓 Resources
-
-- [Solidity Documentation](https://docs.soliditylang.org/)
-- [Hardhat Docs](https://hardhat.org/docs)
-- [Ethers.js Documentation](https://docs.ethers.org/)
-- [Polygon Docs](https://polygon.technology/developers)
-- [React Documentation](https://react.dev/)
-
----
 
 **Built with ❤️ for farmers worldwide** 🌾
