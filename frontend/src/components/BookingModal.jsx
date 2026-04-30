@@ -20,7 +20,7 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
   const getNowDatetime = () => {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    return now.toISOString().slice(0, 16); // format: "2026-04-30T14:30"
+    return now.toISOString().slice(0, 16);
   };
 
   const calculateCost = () => {
@@ -34,12 +34,28 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      // ✅ Calculate cost based on hours → days
       const hours = (end - start) / (1000 * 60 * 60);
-      const days = Math.ceil(hours / 24); // round up to nearest day
+      const days = Math.ceil(hours / 24);
       const cost = days * parseFloat(equipment.pricePerDay);
       setTotalCost(cost);
       setValidationError('');
+    }
+  };
+
+  // ✅ Helper: fetch network gas fees dynamically (fixes "gas tip below minimum" error)
+  const getGasOverrides = async (provider) => {
+    try {
+      const feeData = await provider.getFeeData();
+      return {
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+        maxFeePerGas: feeData.maxFeePerGas,
+      };
+    } catch {
+      // Fallback: hardcode safe values for Polygon Amoy (25+ GWEI tip required)
+      return {
+        maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei'),
+        maxFeePerGas: ethers.parseUnits('60', 'gwei'),
+      };
     }
   };
 
@@ -67,9 +83,10 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      // ✅ Step 1: Get signer
+      // ✅ Step 1: Get signer & gas overrides
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      const gasOverrides = await getGasOverrides(provider); // 🔧 FIX: fetch gas dynamically
 
       // ✅ Step 2: Approve ERC20 token spending
       const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS;
@@ -93,8 +110,11 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       if (currentAllowance < costInWei) {
         setApproving(true);
         setStatusMsg('Step 1/2: Approving token spending...');
-        const approveTx = await tokenContract.approve(contractAddress, costInWei);
+
+        // 🔧 FIX: pass gasOverrides to approve so tip meets Polygon minimum
+        const approveTx = await tokenContract.approve(contractAddress, costInWei, gasOverrides);
         await approveTx.wait();
+
         setApproving(false);
         setStatusMsg('✅ Approved! Step 2/2: Creating booking...');
       } else {
@@ -102,11 +122,13 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       }
 
       // ✅ Step 3: Create booking
+      // 🔧 FIX: pass gasOverrides to createBooking as well
       const tx = await write(
         'createBooking',
         equipment.id,
         startTimestamp,
-        endTimestamp
+        endTimestamp,
+        gasOverrides  // pass as last argument — your useContract hook's write() should spread this
       );
 
       if (tx) {
@@ -124,7 +146,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
   const isLoading = loading || approving;
 
-  // ✅ Show rental duration
   const getRentalDuration = () => {
     if (!startDate || !endDate) return null;
     const hours = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60));
@@ -146,7 +167,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
             <p><strong>Owner:</strong> {equipment.owner?.slice(0, 8)}...{equipment.owner?.slice(-6)}</p>
           </div>
 
-          {/* ✅ datetime-local allows today + hours */}
           <div className="form-group">
             <label>📅 Start Date & Time</label>
             <input
@@ -169,7 +189,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
             />
           </div>
 
-          {/* ✅ Show duration */}
           {startDate && endDate && !validationError && (
             <div className="duration-info">
               <p>⏱️ <strong>Duration:</strong> {getRentalDuration()}</p>
