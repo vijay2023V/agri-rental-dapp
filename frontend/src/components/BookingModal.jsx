@@ -16,7 +16,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
     calculateCost();
   }, [startDate, endDate]);
 
-  // ✅ Get current datetime in local format for min value
   const getNowDatetime = () => {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -42,16 +41,28 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
     }
   };
 
-  // ✅ Helper: fetch network gas fees dynamically (fixes "gas tip below minimum" error)
+  // ✅ Always use safe hardcoded values for Polygon Amoy
+  // getFeeData() returns a tip below the 25 Gwei minimum — don't trust it
   const getGasOverrides = async (provider) => {
     try {
       const feeData = await provider.getFeeData();
+
+      const minTip = ethers.parseUnits('25', 'gwei');
+      const minFee = ethers.parseUnits('50', 'gwei');
+
+      const tip = feeData.maxPriorityFeePerGas && feeData.maxPriorityFeePerGas > minTip
+        ? feeData.maxPriorityFeePerGas
+        : minTip;
+
+      const fee = feeData.maxFeePerGas && feeData.maxFeePerGas > minFee
+        ? feeData.maxFeePerGas
+        : minFee;
+
       return {
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
-        maxFeePerGas: feeData.maxFeePerGas,
+        maxPriorityFeePerGas: tip,
+        maxFeePerGas: fee,
       };
     } catch {
-      // Fallback: hardcode safe values for Polygon Amoy (25+ GWEI tip required)
       return {
         maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei'),
         maxFeePerGas: ethers.parseUnits('60', 'gwei'),
@@ -83,12 +94,10 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      // ✅ Step 1: Get signer & gas overrides
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const gasOverrides = await getGasOverrides(provider); // 🔧 FIX: fetch gas dynamically
+      const gasOverrides = await getGasOverrides(provider);
 
-      // ✅ Step 2: Approve ERC20 token spending
       const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS;
 
       if (!tokenAddress) {
@@ -111,8 +120,11 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         setApproving(true);
         setStatusMsg('Step 1/2: Approving token spending...');
 
-        // 🔧 FIX: pass gasOverrides to approve so tip meets Polygon minimum
-        const approveTx = await tokenContract.approve(contractAddress, costInWei, gasOverrides);
+        const approveTx = await tokenContract.approve(
+          contractAddress,
+          costInWei,
+          gasOverrides
+        );
         await approveTx.wait();
 
         setApproving(false);
@@ -121,14 +133,12 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         setStatusMsg('Creating booking...');
       }
 
-      // ✅ Step 3: Create booking
-      // 🔧 FIX: pass gasOverrides to createBooking as well
       const tx = await write(
         'createBooking',
         equipment.id,
         startTimestamp,
         endTimestamp,
-        gasOverrides  // pass as last argument — your useContract hook's write() should spread this
+        gasOverrides
       );
 
       if (tx) {
