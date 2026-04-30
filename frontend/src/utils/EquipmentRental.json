@@ -1,0 +1,257 @@
+[
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_paymentToken", "type": "address"}
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "bookingId", "type": "uint256"},
+      {"indexed": false, "internalType": "string", "name": "reason", "type": "string"}
+    ],
+    "name": "BookingCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "bookingId", "type": "uint256"},
+      {"indexed": true, "internalType": "uint256", "name": "equipmentId", "type": "uint256"},
+      {"indexed": true, "internalType": "address", "name": "farmer", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "startDate", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "endDate", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "totalCost", "type": "uint256"}
+    ],
+    "name": "BookingCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "bookingId", "type": "uint256"}
+    ],
+    "name": "BookingCompleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "equipmentId", "type": "uint256"},
+      {"indexed": false, "internalType": "string", "name": "name", "type": "string"},
+      {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "pricePerDay", "type": "uint256"}
+    ],
+    "name": "EquipmentAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "uint256", "name": "equipmentId", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "newPrice", "type": "uint256"}
+    ],
+    "name": "EquipmentUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "from", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+    ],
+    "name": "PaymentReceived",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {"internalType": "string", "name": "_name", "type": "string"},
+      {"internalType": "string", "name": "_description", "type": "string"},
+      {"internalType": "uint256", "name": "_pricePerDay", "type": "uint256"}
+    ],
+    "name": "addEquipment",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_equipmentId", "type": "uint256"},
+      {"internalType": "uint256", "name": "_startDate", "type": "uint256"},
+      {"internalType": "uint256", "name": "_endDate", "type": "uint256"}
+    ],
+    "name": "createBooking",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_bookingId", "type": "uint256"}
+    ],
+    "name": "cancelBooking",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_bookingId", "type": "uint256"}
+    ],
+    "name": "completeBooking",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_equipmentId", "type": "uint256"},
+      {"internalType": "uint256", "name": "_startDate", "type": "uint256"},
+      {"internalType": "uint256", "name": "_endDate", "type": "uint256"}
+    ],
+    "name": "isEquipmentAvailable",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAllEquipment",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "id", "type": "uint256"},
+          {"internalType": "string", "name": "name", "type": "string"},
+          {"internalType": "string", "name": "description", "type": "string"},
+          {"internalType": "address", "name": "owner", "type": "address"},
+          {"internalType": "uint256", "name": "pricePerDay", "type": "uint256"},
+          {"internalType": "bool", "name": "isActive", "type": "bool"},
+          {"internalType": "uint256", "name": "totalBookings", "type": "uint256"}
+        ],
+        "internalType": "struct EquipmentRental.Equipment[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_equipmentId", "type": "uint256"}
+    ],
+    "name": "getEquipment",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "id", "type": "uint256"},
+          {"internalType": "string", "name": "name", "type": "string"},
+          {"internalType": "string", "name": "description", "type": "string"},
+          {"internalType": "address", "name": "owner", "type": "address"},
+          {"internalType": "uint256", "name": "pricePerDay", "type": "uint256"},
+          {"internalType": "bool", "name": "isActive", "type": "bool"},
+          {"internalType": "uint256", "name": "totalBookings", "type": "uint256"}
+        ],
+        "internalType": "struct EquipmentRental.Equipment",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_user", "type": "address"}
+    ],
+    "name": "getUserBookings",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "id", "type": "uint256"},
+          {"internalType": "uint256", "name": "equipmentId", "type": "uint256"},
+          {"internalType": "address", "name": "farmer", "type": "address"},
+          {"internalType": "uint256", "name": "startDate", "type": "uint256"},
+          {"internalType": "uint256", "name": "endDate", "type": "uint256"},
+          {"internalType": "uint256", "name": "totalCost", "type": "uint256"},
+          {"internalType": "uint8", "name": "status", "type": "uint8"},
+          {"internalType": "uint256", "name": "createdAt", "type": "uint256"}
+        ],
+        "internalType": "struct EquipmentRental.Booking[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_owner", "type": "address"}
+    ],
+    "name": "getOwnerEquipment",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "id", "type": "uint256"},
+          {"internalType": "string", "name": "name", "type": "string"},
+          {"internalType": "string", "name": "description", "type": "string"},
+          {"internalType": "address", "name": "owner", "type": "address"},
+          {"internalType": "uint256", "name": "pricePerDay", "type": "uint256"},
+          {"internalType": "bool", "name": "isActive", "type": "bool"},
+          {"internalType": "uint256", "name": "totalBookings", "type": "uint256"}
+        ],
+        "internalType": "struct EquipmentRental.Equipment[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_bookingId", "type": "uint256"}
+    ],
+    "name": "getBooking",
+    "outputs": [
+      {
+        "components": [
+          {"internalType": "uint256", "name": "id", "type": "uint256"},
+          {"internalType": "uint256", "name": "equipmentId", "type": "uint256"},
+          {"internalType": "address", "name": "farmer", "type": "address"},
+          {"internalType": "uint256", "name": "startDate", "type": "uint256"},
+          {"internalType": "uint256", "name": "endDate", "type": "uint256"},
+          {"internalType": "uint256", "name": "totalCost", "type": "uint256"},
+          {"internalType": "uint8", "name": "status", "type": "uint8"},
+          {"internalType": "uint256", "name": "createdAt", "type": "uint256"}
+        ],
+        "internalType": "struct EquipmentRental.Booking",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_equipmentId", "type": "uint256"}
+    ],
+    "name": "updateEquipmentPrice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_equipmentId", "type": "uint256"}
+    ],
+    "name": "toggleEquipmentStatus",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

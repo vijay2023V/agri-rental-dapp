@@ -1,0 +1,22 @@
+.modal-content form .modal-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.modal-body textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.modal-body textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #f9fafb;
+}

@@ -1,0 +1,35 @@
+{
+  "name": "farming-dapp",
+  "version": "1.0.0",
+  "description": "Decentralized Farming Equipment Rental Platform on Polygon",
+  "main": "hardhat.config.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js --network polygonAmoy",
+    "deploy-local": "hardhat run scripts/deploy.js --network localhost",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "frontend": "cd frontend && npm start",
+    "frontend-build": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "blockchain",
+    "web3",
+    "farming",
+    "rental",
+    "polygon",
+    "ethereum"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@openzeppelin/hardhat-upgrades": "^2.0.0",
+    "hardhat": "^2.17.0",
+    "dotenv": "^16.3.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3"
+  }
+}

@@ -1,0 +1,143 @@
+import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { useContract } from '../hooks/useContract';
+import '../styles/BookingModal.css';
+
+const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSuccess }) => {
+  const { write, loading, error } = useContract(contractAddress, contractABI);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [totalCost, setTotalCost] = useState(0);
+  const [validationError, setValidationError] = useState('');
+
+  useEffect(() => {
+    calculateCost();
+  }, [startDate, endDate]);
+
+  const calculateCost = () => {
+    if (startDate && endDate) {
+      const start = new Date(startDate).getTime();
+      const end = new Date(endDate).getTime();
+
+      if (end <= start) {
+        setValidationError('End date must be after start date');
+        setTotalCost(0);
+        return;
+      }
+
+      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      const cost = days * parseFloat(equipment.pricePerDay);
+      setTotalCost(cost);
+      setValidationError('');
+    }
+  };
+
+  const handleBooking = async () => {
+    try {
+      setValidationError('');
+
+      if (!startDate || !endDate) {
+        setValidationError('Please select both dates');
+        return;
+      }
+
+      const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
+      const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+
+      if (endTimestamp <= startTimestamp) {
+        setValidationError('End date must be after start date');
+        return;
+      }
+
+      // Call the contract method
+      const tx = await write(
+        'createBooking',
+        equipment.id,
+        startTimestamp,
+        endTimestamp
+      );
+
+      if (tx) {
+        alert('Booking created successfully!');
+        onSuccess();
+      }
+    } catch (err) {
+      setValidationError(err.message || 'Booking failed');
+      console.error('Booking error:', err);
+    }
+  };
+
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>📅 Book {equipment.name}</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="modal-body">
+          <div className="booking-info">
+            <p><strong>Price:</strong> {equipment.pricePerDay} MATIC/day</p>
+          </div>
+
+          <div className="form-group">
+            <label>Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              min={getTodayDate()}
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              min={startDate || getTodayDate()}
+              className="form-input"
+            />
+          </div>
+
+          {totalCost > 0 && (
+            <div className="cost-summary">
+              <p><strong>Total Cost:</strong> {totalCost.toFixed(4)} MATIC</p>
+            </div>
+          )}
+
+          {validationError && (
+            <div className="error-message">{validationError}</div>
+          )}
+
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-cancel" onClick={onClose} disabled={loading}>
+            Cancel
+          </button>
+          <button
+            className="btn-confirm"
+            onClick={handleBooking}
+            disabled={loading || !startDate || !endDate}
+          >
+            {loading ? 'Processing...' : 'Confirm Booking'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BookingModal;
