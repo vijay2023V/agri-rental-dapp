@@ -7,9 +7,10 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
   const { write, loading, error } = useContract(contractAddress, contractABI);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [isAvailable, setIsAvailable] = useState(true);
   const [totalCost, setTotalCost] = useState(0);
   const [validationError, setValidationError] = useState('');
+  const [approving, setApproving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
     calculateCost();
@@ -17,8 +18,8 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
   const calculateCost = () => {
     if (startDate && endDate) {
-      const start = new Date(startDate).getTime();
-      const end = new Date(endDate).getTime();
+      const start = new Date(startDate + 'T12:00:00').getTime();
+      const end = new Date(endDate + 'T12:00:00').getTime();
 
       if (end <= start) {
         setValidationError('End date must be after start date');
@@ -33,9 +34,16 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
     }
   };
 
+  const getTodayDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
   const handleBooking = async () => {
     try {
       setValidationError('');
+      setStatusMsg('');
 
       if (!startDate || !endDate) {
         setValidationError('Please select both dates');
@@ -50,7 +58,42 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      // Call the contract method
+      // ✅ Step 1: Get signer
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      // ✅ Step 2: Approve ERC20 token spending
+      const tokenAddress = process.env.REACT_APP_TOKEN_ADDRESS;
+
+      if (!tokenAddress) {
+        setValidationError('Token address not configured. Check your .env file.');
+        return;
+      }
+
+      const tokenABI = [
+        "function approve(address spender, uint256 amount) public returns (bool)",
+        "function allowance(address owner, address spender) public view returns (uint256)"
+      ];
+
+      const tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
+      const costInWei = ethers.parseEther(totalCost.toString());
+      const userAddress = await signer.getAddress();
+
+      // Check existing allowance first
+      const currentAllowance = await tokenContract.allowance(userAddress, contractAddress);
+
+      if (currentAllowance < costInWei) {
+        setApproving(true);
+        setStatusMsg('Step 1/2: Approving token spending...');
+        const approveTx = await tokenContract.approve(contractAddress, costInWei);
+        await approveTx.wait();
+        setApproving(false);
+        setStatusMsg('✅ Approved! Step 2/2: Creating booking...');
+      } else {
+        setStatusMsg('Creating booking...');
+      }
+
+      // ✅ Step 3: Create booking
       const tx = await write(
         'createBooking',
         equipment.id,
@@ -59,20 +102,19 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       );
 
       if (tx) {
-        alert('Booking created successfully!');
+        setStatusMsg('');
+        alert('🎉 Booking created successfully!');
         onSuccess();
       }
     } catch (err) {
-      setValidationError(err.message || 'Booking failed');
+      setApproving(false);
+      setStatusMsg('');
+      setValidationError(err.reason || err.message || 'Booking failed');
       console.error('Booking error:', err);
     }
   };
 
-  const getTodayDate = () => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split('T')[0];
-  };
+  const isLoading = loading || approving;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -115,25 +157,30 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
             </div>
           )}
 
+          {/* Status message */}
+          {statusMsg && (
+            <div className="status-message">{statusMsg}</div>
+          )}
+
           {validationError && (
             <div className="error-message">{validationError}</div>
           )}
 
-          {error && (
+          {error && !validationError && (
             <div className="error-message">{error}</div>
           )}
         </div>
 
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose} disabled={loading}>
+          <button className="btn-cancel" onClick={onClose} disabled={isLoading}>
             Cancel
           </button>
           <button
             className="btn-confirm"
             onClick={handleBooking}
-            disabled={loading || !startDate || !endDate}
+            disabled={isLoading || !startDate || !endDate || totalCost <= 0}
           >
-            {loading ? 'Processing...' : 'Confirm Booking'}
+            {approving ? '⏳ Approving...' : loading ? '⏳ Booking...' : 'Confirm Booking'}
           </button>
         </div>
       </div>
