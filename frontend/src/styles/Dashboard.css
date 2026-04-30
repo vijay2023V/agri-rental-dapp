@@ -156,6 +156,14 @@
   background: #f9fafb;
 }
 
+/* ✅ Action cell — flex container for buttons in table rows */
+.action-cell {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .status-badge {
   display: inline-block;
   padding: 0.5rem 1rem;
@@ -208,6 +216,30 @@
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+/* ✅ Cancel booking button */
+.btn-cancel-booking {
+  background: linear-gradient(135deg, #fc8181 0%, #e53e3e 100%);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-cancel-booking:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+}
+
+.btn-cancel-booking:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ✅ Action labels */
@@ -278,7 +310,8 @@
     border: 1px solid #e2e8f0;
   }
 
-  .btn-complete {
+  .btn-complete,
+  .btn-cancel-booking {
     padding: 0.35rem 0.7rem;
     font-size: 0.8rem;
   }

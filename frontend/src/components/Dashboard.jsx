@@ -9,6 +9,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
   const { call, write, loading } = useContract(contractAddress, contractABI);
   const [userBookings, setUserBookings] = useState([]);
   const [ownerEquipment, setOwnerEquipment] = useState([]);
+  const [ownerBookings, setOwnerBookings] = useState([]); // ✅ bookings on owner's equipment
   const [stats, setStats] = useState({
     totalBookings: 0,
     totalEquipment: 0,
@@ -16,6 +17,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
   });
   const [activeTab, setActiveTab] = useState('bookings');
   const [completingId, setCompletingId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -27,6 +29,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
 
   const fetchDashboardData = async () => {
     try {
+      // ✅ Fetch farmer's bookings
       const bookings = await call('getUserBookings', account);
       const formattedBookings = bookings.map((booking) => ({
         id: Number(booking.id),
@@ -40,6 +43,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
       }));
       setUserBookings(formattedBookings);
 
+      // ✅ Fetch owner's equipment
       const equipment = await call('getOwnerEquipment', account);
       const formattedEquipment = equipment.map((eq) => ({
         id: Number(eq.id),
@@ -49,6 +53,29 @@ const Dashboard = ({ contractAddress, contractABI }) => {
         totalBookings: Number(eq.totalBookings),
       }));
       setOwnerEquipment(formattedEquipment);
+
+      // ✅ Fetch bookings on owner's equipment
+      const allOwnerBookings = [];
+      for (const eq of formattedEquipment) {
+        try {
+          const slots = await call('getEquipmentTimeSlots', eq.id);
+          slots.forEach((slot, index) => {
+            if (slot.isBooked) {
+              allOwnerBookings.push({
+                equipmentId: eq.id,
+                equipmentName: eq.name,
+                bookedBy: slot.bookedBy,
+                startDate: new Date(Number(slot.startDate) * 1000),
+                endDate: new Date(Number(slot.endDate) * 1000),
+                slotIndex: index,
+              });
+            }
+          });
+        } catch (e) {
+          console.error('Error fetching slots for equipment', eq.id, e);
+        }
+      }
+      setOwnerBookings(allOwnerBookings);
 
       setStats({
         totalBookings: formattedBookings.length,
@@ -60,31 +87,53 @@ const Dashboard = ({ contractAddress, contractABI }) => {
     }
   };
 
-  // ✅ Complete booking handler
+  // ✅ Complete booking
   const handleCompleteBooking = async (bookingId, endDate) => {
     try {
       setErrorMsg('');
       setSuccessMsg('');
-
-      // Check if rental period has ended
       const now = new Date();
       if (now < endDate) {
         setErrorMsg(`Cannot complete yet. Rental ends on ${formatDate(endDate)}`);
         return;
       }
-
       setCompletingId(bookingId);
       const tx = await write('completeBooking', bookingId);
-
       if (tx) {
         setSuccessMsg(`✅ Booking #${bookingId} completed! Payment released to equipment owner.`);
-        await fetchDashboardData(); // refresh
+        await fetchDashboardData();
       }
     } catch (err) {
       setErrorMsg(err.reason || err.message || 'Failed to complete booking');
-      console.error('Complete booking error:', err);
     } finally {
       setCompletingId(null);
+    }
+  };
+
+  // ✅ Cancel booking (farmer cancels their own)
+  const handleCancelBooking = async (bookingId, startDate) => {
+    try {
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      const now = new Date();
+      if (now >= startDate) {
+        setErrorMsg('Cannot cancel — rental has already started!');
+        return;
+      }
+
+      if (!window.confirm('Are you sure you want to cancel? You will get a full refund.')) return;
+
+      setCancellingId(bookingId);
+      const tx = await write('cancelBooking', bookingId);
+      if (tx) {
+        setSuccessMsg(`✅ Booking #${bookingId} cancelled! Full refund sent to your wallet.`);
+        await fetchDashboardData();
+      }
+    } catch (err) {
+      setErrorMsg(err.reason || err.message || 'Failed to cancel booking');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -98,18 +147,11 @@ const Dashboard = ({ contractAddress, contractABI }) => {
   };
 
   const formatDate = (date) => {
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ✅ Check if booking can be completed
-  const canComplete = (booking) => {
-    return booking.status === 'Active' && new Date() >= booking.endDate;
-  };
-
-  // ✅ Check if booking end date has passed
-  const isPastEndDate = (booking) => {
-    return new Date() >= booking.endDate;
-  };
+  const canComplete = (booking) => booking.status === 'Active' && new Date() >= booking.endDate;
+  const canCancel = (booking) => booking.status === 'Active' && new Date() < booking.startDate;
 
   if (!isConnected) {
     return (
@@ -143,31 +185,24 @@ const Dashboard = ({ contractAddress, contractABI }) => {
         </div>
       </div>
 
-      {/* ✅ Success & Error messages */}
-      {successMsg && (
-        <div className="success-message">{successMsg}</div>
-      )}
-      {errorMsg && (
-        <div className="error-message">{errorMsg}</div>
-      )}
+      {successMsg && <div className="success-message">{successMsg}</div>}
+      {errorMsg && <div className="error-message">{errorMsg}</div>}
 
       <div className="dashboard-tabs">
-        <button
-          className={`tab-btn ${activeTab === 'bookings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('bookings')}
-        >
+        <button className={`tab-btn ${activeTab === 'bookings' ? 'active' : ''}`} onClick={() => setActiveTab('bookings')}>
           📅 My Bookings
         </button>
-        <button
-          className={`tab-btn ${activeTab === 'equipment' ? 'active' : ''}`}
-          onClick={() => setActiveTab('equipment')}
-        >
+        <button className={`tab-btn ${activeTab === 'equipment' ? 'active' : ''}`} onClick={() => setActiveTab('equipment')}>
           🚜 My Equipment
+        </button>
+        <button className={`tab-btn ${activeTab === 'received' ? 'active' : ''}`} onClick={() => setActiveTab('received')}>
+          📋 Received Bookings
         </button>
       </div>
 
       {loading && <div className="loading">Loading...</div>}
 
+      {/* ✅ MY BOOKINGS TAB — farmer can cancel */}
       {activeTab === 'bookings' && (
         <div className="tab-content">
           <h3>My Bookings</h3>
@@ -177,8 +212,8 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                 <thead>
                   <tr>
                     <th>Equipment ID</th>
-                    <th>Start Date</th>
-                    <th>End Date</th>
+                    <th>Start</th>
+                    <th>End</th>
                     <th>Cost (MATIC)</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -196,29 +231,33 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                           {booking.status}
                         </span>
                       </td>
-                      {/* ✅ Complete Booking Button */}
-                      <td>
-                        {booking.status === 'Active' && (
-                          canComplete(booking) ? (
-                            <button
-                              className="btn-complete"
-                              onClick={() => handleCompleteBooking(booking.id, booking.endDate)}
-                              disabled={completingId === booking.id}
-                            >
-                              {completingId === booking.id ? '⏳ Processing...' : '✅ Complete'}
-                            </button>
-                          ) : (
-                            <span className="pending-label">
-                              ⏳ Ends {booking.endDate.toLocaleDateString()}
-                            </span>
-                          )
+                      <td className="action-cell">
+                        {/* Complete button */}
+                        {canComplete(booking) && (
+                          <button
+                            className="btn-complete"
+                            onClick={() => handleCompleteBooking(booking.id, booking.endDate)}
+                            disabled={completingId === booking.id}
+                          >
+                            {completingId === booking.id ? '⏳...' : '✅ Complete'}
+                          </button>
                         )}
-                        {booking.status === 'Completed' && (
-                          <span className="done-label">💰 Paid</span>
+                        {/* ✅ Cancel button for farmer */}
+                        {canCancel(booking) && (
+                          <button
+                            className="btn-cancel-booking"
+                            onClick={() => handleCancelBooking(booking.id, booking.startDate)}
+                            disabled={cancellingId === booking.id}
+                          >
+                            {cancellingId === booking.id ? '⏳...' : '❌ Cancel'}
+                          </button>
                         )}
-                        {booking.status === 'Cancelled' && (
-                          <span className="cancelled-label">❌ Cancelled</span>
+                        {/* Ongoing — cannot cancel or complete yet */}
+                        {booking.status === 'Active' && !canComplete(booking) && !canCancel(booking) && (
+                          <span className="pending-label">🔄 Ongoing</span>
                         )}
+                        {booking.status === 'Completed' && <span className="done-label">💰 Paid</span>}
+                        {booking.status === 'Cancelled' && <span className="cancelled-label">❌ Cancelled</span>}
                       </td>
                     </tr>
                   ))}
@@ -231,6 +270,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
         </div>
       )}
 
+      {/* ✅ MY EQUIPMENT TAB */}
       {activeTab === 'equipment' && (
         <div className="tab-content">
           <h3>My Equipment</h3>
@@ -263,6 +303,51 @@ const Dashboard = ({ contractAddress, contractABI }) => {
             </div>
           ) : (
             <p className="no-data">No equipment listed yet</p>
+          )}
+        </div>
+      )}
+
+      {/* ✅ RECEIVED BOOKINGS TAB — owner sees who booked their equipment */}
+      {activeTab === 'received' && (
+        <div className="tab-content">
+          <h3>Bookings on My Equipment</h3>
+          {ownerBookings.length > 0 ? (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Equipment</th>
+                    <th>Booked By</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ownerBookings.map((slot, index) => (
+                    <tr key={index}>
+                      <td>{slot.equipmentName}</td>
+                      <td>{slot.bookedBy.slice(0, 8)}...{slot.bookedBy.slice(-6)}</td>
+                      <td>{formatDate(slot.startDate)}</td>
+                      <td>{formatDate(slot.endDate)}</td>
+                      <td>
+                        {new Date() < slot.startDate && (
+                          <span className="status-badge status-active">Upcoming</span>
+                        )}
+                        {new Date() >= slot.startDate && new Date() < slot.endDate && (
+                          <span className="status-badge status-active">🔄 Ongoing</span>
+                        )}
+                        {new Date() >= slot.endDate && (
+                          <span className="status-badge status-completed">Ended</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="no-data">No bookings received yet</p>
           )}
         </div>
       )}

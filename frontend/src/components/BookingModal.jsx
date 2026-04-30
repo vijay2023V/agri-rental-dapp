@@ -16,10 +16,17 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
     calculateCost();
   }, [startDate, endDate]);
 
+  // ✅ Get current datetime in local format for min value
+  const getNowDatetime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16); // format: "2026-04-30T14:30"
+  };
+
   const calculateCost = () => {
     if (startDate && endDate) {
-      const start = new Date(startDate + 'T12:00:00').getTime();
-      const end = new Date(endDate + 'T12:00:00').getTime();
+      const start = new Date(startDate).getTime();
+      const end = new Date(endDate).getTime();
 
       if (end <= start) {
         setValidationError('End date must be after start date');
@@ -27,17 +34,13 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      // ✅ Calculate cost based on hours → days
+      const hours = (end - start) / (1000 * 60 * 60);
+      const days = Math.ceil(hours / 24); // round up to nearest day
       const cost = days * parseFloat(equipment.pricePerDay);
       setTotalCost(cost);
       setValidationError('');
     }
-  };
-
-  const getTodayDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
   };
 
   const handleBooking = async () => {
@@ -46,15 +49,21 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       setStatusMsg('');
 
       if (!startDate || !endDate) {
-        setValidationError('Please select both dates');
+        setValidationError('Please select both dates and times');
         return;
       }
 
-      const startTimestamp = Math.floor(new Date(startDate + 'T12:00:00').getTime() / 1000);
-      const endTimestamp = Math.floor(new Date(endDate + 'T12:00:00').getTime() / 1000);
+      const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
+      const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+      const nowTimestamp = Math.floor(Date.now() / 1000);
+
+      if (startTimestamp <= nowTimestamp) {
+        setValidationError('Start time must be in the future');
+        return;
+      }
 
       if (endTimestamp <= startTimestamp) {
-        setValidationError('End date must be after start date');
+        setValidationError('End time must be after start time');
         return;
       }
 
@@ -63,7 +72,7 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       const signer = await provider.getSigner();
 
       // ✅ Step 2: Approve ERC20 token spending
-      const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS; // ✅ fixed
+      const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS;
 
       if (!tokenAddress) {
         setValidationError('Token address not configured. Check your .env file.');
@@ -79,7 +88,6 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
       const costInWei = ethers.parseEther(totalCost.toString());
       const userAddress = await signer.getAddress();
 
-      // Check existing allowance first
       const currentAllowance = await tokenContract.allowance(userAddress, contractAddress);
 
       if (currentAllowance < costInWei) {
@@ -116,6 +124,14 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
   const isLoading = loading || approving;
 
+  // ✅ Show rental duration
+  const getRentalDuration = () => {
+    if (!startDate || !endDate) return null;
+    const hours = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60));
+    const days = Math.ceil(hours / 24);
+    return `${hours} hours (${days} day${days > 1 ? 's' : ''})`;
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -127,29 +143,38 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         <div className="modal-body">
           <div className="booking-info">
             <p><strong>Price:</strong> {equipment.pricePerDay} MATIC/day</p>
+            <p><strong>Owner:</strong> {equipment.owner?.slice(0, 8)}...{equipment.owner?.slice(-6)}</p>
           </div>
 
+          {/* ✅ datetime-local allows today + hours */}
           <div className="form-group">
-            <label>Start Date</label>
+            <label>📅 Start Date & Time</label>
             <input
-              type="date"
+              type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              min={getTodayDate()}
+              min={getNowDatetime()}
               className="form-input"
             />
           </div>
 
           <div className="form-group">
-            <label>End Date</label>
+            <label>📅 End Date & Time</label>
             <input
-              type="date"
+              type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              min={startDate || getTodayDate()}
+              min={startDate || getNowDatetime()}
               className="form-input"
             />
           </div>
+
+          {/* ✅ Show duration */}
+          {startDate && endDate && !validationError && (
+            <div className="duration-info">
+              <p>⏱️ <strong>Duration:</strong> {getRentalDuration()}</p>
+            </div>
+          )}
 
           {totalCost > 0 && (
             <div className="cost-summary">
