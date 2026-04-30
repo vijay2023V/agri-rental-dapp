@@ -24,14 +24,14 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         string name;
         string description;
         address owner;
-        uint256 pricePerDay; // in wei
+        uint256 pricePerDay;
         bool isActive;
         uint256 totalBookings;
     }
     
     struct TimeSlot {
-        uint256 startDate; // timestamp
-        uint256 endDate;   // timestamp
+        uint256 startDate;
+        uint256 endDate;
         bool isBooked;
         address bookedBy;
     }
@@ -94,7 +94,10 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     }
     
     modifier onlyBookingParty(uint256 _bookingId) {
-        require(msg.sender == bookingById[_bookingId].farmer || msg.sender == owner(), "Not authorized");
+        require(
+            msg.sender == bookingById[_bookingId].farmer || msg.sender == owner(),
+            "Not authorized"
+        );
         _;
     }
     
@@ -108,9 +111,6 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     
     /**
      * @dev Add a new equipment for rental
-     * @param _name Equipment name
-     * @param _description Equipment description
-     * @param _pricePerDay Price per day in wei
      */
     function addEquipment(
         string memory _name,
@@ -204,7 +204,7 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         for (uint256 i = 0; i < slots.length; i++) {
             if (slots[i].isBooked) {
                 if (!(_endDate <= slots[i].startDate || _startDate >= slots[i].endDate)) {
-                    return false; // Overlap detected
+                    return false;
                 }
             }
         }
@@ -213,6 +213,8 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     
     /**
      * @dev Create a booking
+     * @dev Uses ceiling division to match frontend Math.ceil(hours / 24)
+     *      so sub-24h bookings correctly count as 1 day instead of reverting.
      */
     function createBooking(
         uint256 _equipmentId,
@@ -222,13 +224,15 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         Equipment storage equipment = equipmentById[_equipmentId];
         require(equipment.isActive, "Equipment is not active");
         require(isEquipmentAvailable(_equipmentId, _startDate, _endDate), "Equipment not available");
-        
-        uint256 daysCount = (_endDate - _startDate) / 1 days;
-        require(daysCount > 0, "Invalid date range");
-        
+
+        // ✅ FIX: ceiling division — matches frontend Math.ceil(hours / 24)
+        // e.g. 4h duration → (4h + 24h - 1) / 24h = 1 day (not 0)
+        uint256 duration = _endDate - _startDate;
+        require(duration > 0, "Invalid date range");
+        uint256 daysCount = (duration + 1 days - 1) / 1 days;
+
         uint256 totalCost = equipment.pricePerDay * daysCount;
         
-        // Transfer payment token from farmer to contract
         require(
             paymentToken.transferFrom(msg.sender, address(this), totalCost),
             "Payment transfer failed"
@@ -237,7 +241,6 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         bookingCount++;
         uint256 bookingId = bookingCount;
         
-        // Create booking
         bookingById[bookingId] = Booking({
             id: bookingId,
             equipmentId: _equipmentId,
@@ -245,11 +248,10 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
             startDate: _startDate,
             endDate: _endDate,
             totalCost: totalCost,
-            status: 0, // Active
+            status: 0,
             createdAt: block.timestamp
         });
         
-        // Add time slot
         equipmentTimeSlots[_equipmentId].push(TimeSlot({
             startDate: _startDate,
             endDate: _endDate,
@@ -272,11 +274,13 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         require(booking.status == 0, "Booking is not active");
         require(block.timestamp >= booking.endDate, "Rental period not ended yet");
         
-        booking.status = 1; // Completed
+        booking.status = 1;
         
-        // Transfer payment to equipment owner
         Equipment storage equipment = equipmentById[booking.equipmentId];
-        require(paymentToken.transfer(equipment.owner, booking.totalCost), "Payment transfer failed");
+        require(
+            paymentToken.transfer(equipment.owner, booking.totalCost),
+            "Payment transfer failed"
+        );
         
         emit BookingCompleted(_bookingId);
     }
@@ -289,17 +293,20 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         require(booking.status == 0, "Booking is not active");
         require(block.timestamp < booking.startDate, "Cannot cancel ongoing/past bookings");
         
-        booking.status = 2; // Cancelled
+        booking.status = 2;
         
-        // Refund payment to farmer
-        require(paymentToken.transfer(booking.farmer, booking.totalCost), "Refund transfer failed");
+        require(
+            paymentToken.transfer(booking.farmer, booking.totalCost),
+            "Refund transfer failed"
+        );
         
-        // Mark time slot as available
         TimeSlot[] storage slots = equipmentTimeSlots[booking.equipmentId];
         for (uint256 i = 0; i < slots.length; i++) {
-            if (slots[i].bookedBy == msg.sender &&
+            if (
+                slots[i].bookedBy == msg.sender &&
                 slots[i].startDate == booking.startDate &&
-                slots[i].endDate == booking.endDate) {
+                slots[i].endDate == booking.endDate
+            ) {
                 slots[i].isBooked = false;
                 break;
             }
@@ -314,7 +321,6 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     function getUserBookings(address _user) external view returns (Booking[] memory) {
         uint256[] storage bookingIds = userBookings[_user];
         Booking[] memory userBookingsList = new Booking[](bookingIds.length);
-        
         for (uint256 i = 0; i < bookingIds.length; i++) {
             userBookingsList[i] = bookingById[bookingIds[i]];
         }
@@ -327,7 +333,6 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     function getOwnerEquipment(address _owner) external view returns (Equipment[] memory) {
         uint256[] storage equipmentIds = ownerEquipment[_owner];
         Equipment[] memory ownerEquipmentList = new Equipment[](equipmentIds.length);
-        
         for (uint256 i = 0; i < equipmentIds.length; i++) {
             ownerEquipmentList[i] = equipmentById[equipmentIds[i]];
         }

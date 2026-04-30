@@ -50,6 +50,29 @@
   opacity: 0.9;
 }
 
+/* ✅ Success & Error messages */
+.success-message {
+  background: linear-gradient(135deg, rgba(72, 187, 120, 0.1) 0%, rgba(56, 161, 105, 0.1) 100%);
+  color: #38a169;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #48bb78;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease;
+}
+
+.error-message {
+  background: #fff5f5;
+  color: #c00;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 4px solid #c00;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease;
+}
+
 .dashboard-tabs {
   display: flex;
   gap: 1rem;
@@ -133,6 +156,14 @@
   background: #f9fafb;
 }
 
+/* ✅ Action cell — flex container for buttons in table rows */
+.action-cell {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .status-badge {
   display: inline-block;
   padding: 0.5rem 1rem;
@@ -162,11 +193,87 @@
   color: #7c2d12;
 }
 
+/* ✅ Complete booking button */
+.btn-complete {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-complete:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);
+}
+
+.btn-complete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ✅ Cancel booking button */
+.btn-cancel-booking {
+  background: linear-gradient(135deg, #fc8181 0%, #e53e3e 100%);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-cancel-booking:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+}
+
+.btn-cancel-booking:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ✅ Action labels */
+.pending-label {
+  color: #f6ad55;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.done-label {
+  color: #48bb78;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.cancelled-label {
+  color: #fc8181;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .no-data {
   text-align: center;
   padding: 2rem;
   color: #999;
   font-style: italic;
+}
+
+.loading {
+  text-align: center;
+  padding: 1rem;
+  color: #667eea;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
@@ -194,12 +301,22 @@
   .data-table th,
   .data-table td {
     padding: 0.75rem 0.5rem;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .table-container {
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid #e2e8f0;
+  }
+
+  .btn-complete,
+  .btn-cancel-booking {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .pending-label {
+    font-size: 0.75rem;
   }
 }

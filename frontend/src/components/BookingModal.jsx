@@ -7,13 +7,20 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
   const { write, loading, error } = useContract(contractAddress, contractABI);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [isAvailable, setIsAvailable] = useState(true);
   const [totalCost, setTotalCost] = useState(0);
   const [validationError, setValidationError] = useState('');
+  const [approving, setApproving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
     calculateCost();
   }, [startDate, endDate]);
+
+  const getNowDatetime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  };
 
   const calculateCost = () => {
     if (startDate && endDate) {
@@ -26,51 +33,134 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      const hours = (end - start) / (1000 * 60 * 60);
+      const days = Math.ceil(hours / 24);
       const cost = days * parseFloat(equipment.pricePerDay);
       setTotalCost(cost);
       setValidationError('');
     }
   };
 
+  // ✅ Always use safe hardcoded values for Polygon Amoy
+  // getFeeData() returns a tip below the 25 Gwei minimum — don't trust it
+  const getGasOverrides = async (provider) => {
+    try {
+      const feeData = await provider.getFeeData();
+
+      const minTip = ethers.parseUnits('25', 'gwei');
+      const minFee = ethers.parseUnits('50', 'gwei');
+
+      const tip = feeData.maxPriorityFeePerGas && feeData.maxPriorityFeePerGas > minTip
+        ? feeData.maxPriorityFeePerGas
+        : minTip;
+
+      const fee = feeData.maxFeePerGas && feeData.maxFeePerGas > minFee
+        ? feeData.maxFeePerGas
+        : minFee;
+
+      return {
+        maxPriorityFeePerGas: tip,
+        maxFeePerGas: fee,
+      };
+    } catch {
+      return {
+        maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei'),
+        maxFeePerGas: ethers.parseUnits('60', 'gwei'),
+      };
+    }
+  };
+
   const handleBooking = async () => {
     try {
       setValidationError('');
+      setStatusMsg('');
 
       if (!startDate || !endDate) {
-        setValidationError('Please select both dates');
+        setValidationError('Please select both dates and times');
         return;
       }
 
       const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
       const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
+      const nowTimestamp = Math.floor(Date.now() / 1000);
 
-      if (endTimestamp <= startTimestamp) {
-        setValidationError('End date must be after start date');
+      if (startTimestamp <= nowTimestamp) {
+        setValidationError('Start time must be in the future');
         return;
       }
 
-      // Call the contract method
+      if (endTimestamp <= startTimestamp) {
+        setValidationError('End time must be after start time');
+        return;
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const gasOverrides = await getGasOverrides(provider);
+
+      const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS;
+
+      if (!tokenAddress) {
+        setValidationError('Token address not configured. Check your .env file.');
+        return;
+      }
+
+      const tokenABI = [
+        "function approve(address spender, uint256 amount) public returns (bool)",
+        "function allowance(address owner, address spender) public view returns (uint256)"
+      ];
+
+      const tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
+      const costInWei = ethers.parseEther(totalCost.toString());
+      const userAddress = await signer.getAddress();
+
+      const currentAllowance = await tokenContract.allowance(userAddress, contractAddress);
+
+      if (currentAllowance < costInWei) {
+        setApproving(true);
+        setStatusMsg('Step 1/2: Approving token spending...');
+
+        const approveTx = await tokenContract.approve(
+          contractAddress,
+          costInWei,
+          gasOverrides
+        );
+        await approveTx.wait();
+
+        setApproving(false);
+        setStatusMsg('✅ Approved! Step 2/2: Creating booking...');
+      } else {
+        setStatusMsg('Creating booking...');
+      }
+
       const tx = await write(
         'createBooking',
         equipment.id,
         startTimestamp,
-        endTimestamp
+        endTimestamp,
+        gasOverrides
       );
 
       if (tx) {
-        alert('Booking created successfully!');
+        setStatusMsg('');
+        alert('🎉 Booking created successfully!');
         onSuccess();
       }
     } catch (err) {
-      setValidationError(err.message || 'Booking failed');
+      setApproving(false);
+      setStatusMsg('');
+      setValidationError(err.reason || err.message || 'Booking failed');
       console.error('Booking error:', err);
     }
   };
 
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+  const isLoading = loading || approving;
+
+  const getRentalDuration = () => {
+    if (!startDate || !endDate) return null;
+    const hours = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60));
+    const days = Math.ceil(hours / 24);
+    return `${hours} hours (${days} day${days > 1 ? 's' : ''})`;
   };
 
   return (
@@ -84,29 +174,36 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         <div className="modal-body">
           <div className="booking-info">
             <p><strong>Price:</strong> {equipment.pricePerDay} MATIC/day</p>
+            <p><strong>Owner:</strong> {equipment.owner?.slice(0, 8)}...{equipment.owner?.slice(-6)}</p>
           </div>
 
           <div className="form-group">
-            <label>Start Date</label>
+            <label>📅 Start Date & Time</label>
             <input
-              type="date"
+              type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              min={getTodayDate()}
+              min={getNowDatetime()}
               className="form-input"
             />
           </div>
 
           <div className="form-group">
-            <label>End Date</label>
+            <label>📅 End Date & Time</label>
             <input
-              type="date"
+              type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              min={startDate || getTodayDate()}
+              min={startDate || getNowDatetime()}
               className="form-input"
             />
           </div>
+
+          {startDate && endDate && !validationError && (
+            <div className="duration-info">
+              <p>⏱️ <strong>Duration:</strong> {getRentalDuration()}</p>
+            </div>
+          )}
 
           {totalCost > 0 && (
             <div className="cost-summary">
@@ -114,25 +211,29 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
             </div>
           )}
 
+          {statusMsg && (
+            <div className="status-message">{statusMsg}</div>
+          )}
+
           {validationError && (
             <div className="error-message">{validationError}</div>
           )}
 
-          {error && (
+          {error && !validationError && (
             <div className="error-message">{error}</div>
           )}
         </div>
 
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose} disabled={loading}>
+          <button className="btn-cancel" onClick={onClose} disabled={isLoading}>
             Cancel
           </button>
           <button
             className="btn-confirm"
             onClick={handleBooking}
-            disabled={loading || !startDate || !endDate}
+            disabled={isLoading || !startDate || !endDate || totalCost <= 0}
           >
-            {loading ? 'Processing...' : 'Confirm Booking'}
+            {approving ? '⏳ Approving...' : loading ? '⏳ Booking...' : 'Confirm Booking'}
           </button>
         </div>
       </div>
