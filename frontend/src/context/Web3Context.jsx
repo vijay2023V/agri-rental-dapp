@@ -105,8 +105,8 @@ export const Web3Provider = ({ children }) => {
                 rpcUrls: [POLYGON_TESTNET_RPC],
                 blockExplorerUrls: ['https://www.oklink.com/amoy'],
                 nativeCurrency: {
-                  name: 'MATIC',
-                  symbol: 'MATIC',
+                  name: 'POL',
+                  symbol: 'POL',
                   decimals: 18,
                 },
               },

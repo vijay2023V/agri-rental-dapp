@@ -3,7 +3,6 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title EquipmentRental
@@ -13,7 +12,6 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     
     // ==================== STATE VARIABLES ====================
     
-    IERC20 public paymentToken;
     uint256 public equipmentCount = 0;
     uint256 public bookingCount = 0;
     
@@ -103,14 +101,13 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     
     // ==================== CONSTRUCTOR ====================
     
-    constructor(address _paymentToken) {
-        paymentToken = IERC20(_paymentToken);
-    }
+    constructor() {}
     
     // ==================== EQUIPMENT FUNCTIONS ====================
     
     /**
      * @dev Add a new equipment for rental
+     * @param _pricePerDay Price in Wei (1 POL = 10^18 Wei)
      */
     function addEquipment(
         string memory _name,
@@ -215,12 +212,13 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
      * @dev Create a booking
      * @dev Uses ceiling division to match frontend Math.ceil(hours / 24)
      *      so sub-24h bookings correctly count as 1 day instead of reverting.
+     * @dev pricePerDay is in Wei (1 POL = 10^18 Wei)
      */
     function createBooking(
         uint256 _equipmentId,
         uint256 _startDate,
         uint256 _endDate
-    ) external nonReentrant equipmentExists(_equipmentId) returns (uint256) {
+    ) external payable nonReentrant equipmentExists(_equipmentId) returns (uint256) {
         Equipment storage equipment = equipmentById[_equipmentId];
         require(equipment.isActive, "Equipment is not active");
         require(isEquipmentAvailable(_equipmentId, _startDate, _endDate), "Equipment not available");
@@ -231,12 +229,15 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         require(duration > 0, "Invalid date range");
         uint256 daysCount = (duration + 1 days - 1) / 1 days;
 
+        // Calculate total cost (pricePerDay is already in Wei)
         uint256 totalCost = equipment.pricePerDay * daysCount;
         
-        require(
-            paymentToken.transferFrom(msg.sender, address(this), totalCost),
-            "Payment transfer failed"
-        );
+        // Validate received POL matches total cost
+        require(msg.value == totalCost, "Insufficient POL sent");
+        
+        // Transfer payment immediately to equipment owner
+        (bool success, ) = equipment.owner.call{value: totalCost}("");
+        require(success, "Payment transfer failed");
         
         bookingCount++;
         uint256 bookingId = bookingCount;
@@ -276,17 +277,11 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         
         booking.status = 1;
         
-        Equipment storage equipment = equipmentById[booking.equipmentId];
-        require(
-            paymentToken.transfer(equipment.owner, booking.totalCost),
-            "Payment transfer failed"
-        );
-        
         emit BookingCompleted(_bookingId);
     }
     
     /**
-     * @dev Cancel a booking
+     * @dev Cancel a booking - refund from equipment owner
      */
     function cancelBooking(uint256 _bookingId) external nonReentrant onlyBookingParty(_bookingId) {
         Booking storage booking = bookingById[_bookingId];
@@ -295,10 +290,10 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
         
         booking.status = 2;
         
-        require(
-            paymentToken.transfer(booking.farmer, booking.totalCost),
-            "Refund transfer failed"
-        );
+        // Refund from equipment owner to farmer
+        Equipment storage equipment = equipmentById[booking.equipmentId];
+        (bool success, ) = booking.farmer.call{value: booking.totalCost}("");
+        require(success, "Refund transfer failed");
         
         TimeSlot[] storage slots = equipmentTimeSlots[booking.equipmentId];
         for (uint256 i = 0; i < slots.length; i++) {
@@ -357,4 +352,9 @@ contract EquipmentRental is Ownable, ReentrancyGuard {
     {
         return equipmentTimeSlots[_equipmentId];
     }
+    
+    /**
+     * @dev Allow contract to receive POL
+     */
+    receive() external payable {}
 }

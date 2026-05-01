@@ -28,7 +28,7 @@ A blockchain-based rental platform where farmers can directly book equipment wit
 A decentralized rental platform with:
 - Direct farmer-to-farmer equipment booking
 - Transparent, tamper-proof scheduling on blockchain
-- Secure payments using ERC20 tokens
+- Secure payments using ERC20/POL tokens
 - No middlemen required
 
 ---
@@ -215,7 +215,7 @@ npm run build
    - Fill in:
      - Equipment Name (e.g., "Tractor JCB 3DX")
      - Description (features, condition, etc.)
-     - Price per Day (in MATIC)
+     - Price per Day (in POL)
    - Confirm transaction
 
 3. **Manage Listings**
@@ -328,7 +328,7 @@ npx hardhat coverage
 farming-dapp/
 ├── contracts/
 │   ├── EquipmentRental.sol          # Main rental contract
-│   └── TestToken.sol                 # ERC20 test token
+│   └── TestToken.sol                 # POL test token
 ├── frontend/
 │   ├── src/
 │   │   ├── components/              # React components
@@ -415,7 +415,7 @@ This project is licensed under the no License - see file for details.
 
 ## 👥 Authors
 
-- **Your Name** - Initial work
+- **Your Name** - K VIJAY RAGHAV REDDY 
 - GitHub: https://github.com/vijay2023V
 
 ---

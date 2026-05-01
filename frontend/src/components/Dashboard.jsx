@@ -214,7 +214,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                     <th>Equipment ID</th>
                     <th>Start</th>
                     <th>End</th>
-                    <th>Cost (MATIC)</th>
+                    <th>Cost (POL)</th>
                     <th>Status</th>
                     <th>Action</th>
                   </tr>
@@ -225,7 +225,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                       <td>#{booking.equipmentId}</td>
                       <td>{formatDate(booking.startDate)}</td>
                       <td>{formatDate(booking.endDate)}</td>
-                      <td>{parseFloat(booking.totalCost).toFixed(4)}</td>
+                      <td>{parseFloat(booking.totalCost).toFixed(4)} POL</td>
                       <td>
                         <span className={`status-badge ${getStatusColor(booking.status)}`}>
                           {booking.status}
@@ -280,7 +280,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Price/Day (MATIC)</th>
+                    <th>Price/Day (POL)</th>
                     <th>Total Bookings</th>
                     <th>Status</th>
                   </tr>
@@ -289,7 +289,7 @@ const Dashboard = ({ contractAddress, contractABI }) => {
                   {ownerEquipment.map((equipment) => (
                     <tr key={equipment.id}>
                       <td>{equipment.name}</td>
-                      <td>{parseFloat(equipment.pricePerDay).toFixed(4)}</td>
+                      <td>{parseFloat(equipment.pricePerDay).toFixed(4)} POL</td>
                       <td>{equipment.totalBookings}</td>
                       <td>
                         <span className={`status-badge ${equipment.isActive ? 'status-active' : 'status-inactive'}`}>

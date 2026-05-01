@@ -1,7 +1,7 @@
 {
-  "testToken": "0xEE233980F8a94a220BE69A198bD9702231B2933a",
-  "equipmentRental": "0x56DE3001A5Ac0d353e0cF19F61840EED0ae5c854",
+  "equipmentRental": "0xcD18054F8EA2294941eb56570cdcab66B398B2Aa",
   "deployer": "0x7dA990C5d7AA0b7d2EAbb93a5690f83ce53f3Bb7",
   "network": "polygonAmoy",
-  "timestamp": "2026-04-30T12:29:30.353Z"
+  "currency": "Native POL",
+  "timestamp": "2026-05-01T06:27:05.564Z"
 }

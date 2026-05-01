@@ -24,6 +24,7 @@ export const useContract = (contractAddress, contractABI) => {
       try {
         setLoading(true);
         setError(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         if (!contractAddress || contractAddress === '') {
           throw new Error('Contract address not configured. Please check your environment variables.');
         }
@@ -40,7 +41,7 @@ export const useContract = (contractAddress, contractABI) => {
         setLoading(false);
       }
     },
-    [getContract]
+    [getContract, contractAddress]
   );
 
   const write = useCallback(
@@ -50,8 +51,50 @@ export const useContract = (contractAddress, contractABI) => {
         setError(null);
         const contract = getContract();
         if (!contract) throw new Error('Contract not initialized');
-        const tx = await contract[method](...args);
+
+        // Copy args so we don't mutate the original array
+        let txArgs = [...args];
+        let overrides = {};
+
+        if (txArgs.length > 0) {
+          const lastArg = txArgs[txArgs.length - 1];
+
+          // ✅ FIX: Added 'gasPrice' to detection — without it, { gasPrice, value }
+          // was not recognized as overrides, so value was never sent (0 POL)
+          const isOverrides =
+            typeof lastArg === 'object' &&
+            lastArg !== null &&
+            !Array.isArray(lastArg) &&
+            (
+              lastArg.value !== undefined ||
+              lastArg.gasPrice !== undefined ||          // ✅ ADDED
+              lastArg.maxFeePerGas !== undefined ||
+              lastArg.maxPriorityFeePerGas !== undefined ||
+              lastArg.gasLimit !== undefined
+            );
+
+          if (isOverrides) {
+            overrides = txArgs[txArgs.length - 1];
+            txArgs = txArgs.slice(0, -1);
+          }
+        }
+
+        // Debug logs
+        console.log('Calling contract method:', method);
+        console.log('Arguments:', txArgs);
+        console.log('Overrides:', JSON.stringify(overrides, (key, val) =>
+          typeof val === 'bigint' ? val.toString() + 'n' : val
+        ));
+
+        // ✅ Explicitly pass value to ensure it's not dropped
+        const tx = await contract[method](...txArgs, {
+          ...overrides,
+          ...(overrides.value !== undefined ? { value: overrides.value } : {}),
+        });
+
+        console.log('Transaction submitted:', tx.hash);
         const receipt = await tx.wait();
+        console.log('Transaction confirmed:', receipt.hash);
         return receipt;
       } catch (err) {
         const errorMessage = err.message || 'Unknown error occurred';

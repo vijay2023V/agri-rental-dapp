@@ -87,7 +87,7 @@ const WalletConnect = () => {
               </div>
               <div className="dropdown-item">
                 <span>Balance:</span>
-                <span className="value">{parseFloat(balance).toFixed(4)} MATIC</span>
+                <span className="value">{parseFloat(balance).toFixed(4)} POL</span>
               </div>
               <div className="dropdown-item">
                 <span>Network:</span>

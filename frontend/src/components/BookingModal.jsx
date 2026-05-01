@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useContract } from '../hooks/useContract';
@@ -9,15 +10,17 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
   const [endDate, setEndDate] = useState('');
   const [totalCost, setTotalCost] = useState(0);
   const [validationError, setValidationError] = useState('');
-  const [approving, setApproving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
     calculateCost();
-  }, [startDate, endDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, equipment.pricePerDay]);
 
   const getNowDatetime = () => {
     const now = new Date();
+    // Add 1 hour buffer to account for blockchain clock being ahead
+    now.setHours(now.getHours() + 1);
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 16);
   };
@@ -35,38 +38,46 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
       const hours = (end - start) / (1000 * 60 * 60);
       const days = Math.ceil(hours / 24);
-      const cost = days * parseFloat(equipment.pricePerDay);
-      setTotalCost(cost);
-      setValidationError('');
+
+      try {
+        // pricePerDay comes as "7.0" string from EquipmentList (already formatted from Wei)
+        // So we must parseEther it back to Wei for the contract
+        let priceInWei;
+
+        if (typeof equipment.pricePerDay === 'bigint') {
+          // Already Wei BigInt — use directly
+          priceInWei = equipment.pricePerDay;
+        } else if (typeof equipment.pricePerDay === 'string') {
+          // Formatted string like "7.0" — convert back to Wei
+          priceInWei = ethers.parseEther(equipment.pricePerDay);
+        } else {
+          // Numeric Wei — convert to BigInt
+          priceInWei = BigInt(equipment.pricePerDay.toString());
+        }
+
+        const costInWei = priceInWei * BigInt(days);
+        setTotalCost(costInWei);
+        setValidationError('');
+      } catch (err) {
+        console.error('Error calculating cost:', err);
+        setValidationError('Error calculating booking cost');
+        setTotalCost(0);
+      }
     }
   };
 
-  // ✅ Always use safe hardcoded values for Polygon Amoy
-  // getFeeData() returns a tip below the 25 Gwei minimum — don't trust it
+  // Polygon Amoy uses legacy gas — NOT EIP-1559
   const getGasOverrides = async (provider) => {
     try {
-      const feeData = await provider.getFeeData();
-
-      const minTip = ethers.parseUnits('25', 'gwei');
-      const minFee = ethers.parseUnits('50', 'gwei');
-
-      const tip = feeData.maxPriorityFeePerGas && feeData.maxPriorityFeePerGas > minTip
-        ? feeData.maxPriorityFeePerGas
-        : minTip;
-
-      const fee = feeData.maxFeePerGas && feeData.maxFeePerGas > minFee
-        ? feeData.maxFeePerGas
-        : minFee;
-
-      return {
-        maxPriorityFeePerGas: tip,
-        maxFeePerGas: fee,
-      };
-    } catch {
-      return {
-        maxPriorityFeePerGas: ethers.parseUnits('30', 'gwei'),
-        maxFeePerGas: ethers.parseUnits('60', 'gwei'),
-      };
+      const gasPrice = await provider.send('eth_gasPrice', []);
+      const gasPriceBigInt = BigInt(gasPrice);
+      // Add 20% buffer
+      const bufferedGasPrice = (gasPriceBigInt * BigInt(120)) / BigInt(100);
+      console.log('gasPrice (Gwei):', ethers.formatUnits(bufferedGasPrice, 'gwei'));
+      return { gasPrice: bufferedGasPrice };
+    } catch (e) {
+      console.warn('eth_gasPrice failed, fallback 30 Gwei', e);
+      return { gasPrice: ethers.parseUnits('30', 'gwei') };
     }
   };
 
@@ -80,12 +91,45 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
+      if (totalCost === 0 || !totalCost) {
+        setValidationError('Invalid total cost. Please check your booking dates.');
+        return;
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+
+      // ✅ Get REAL blockchain timestamp — not JS Date.now()
+      // Polygon Amoy chain clock can be different from your system clock
+      setStatusMsg('Checking blockchain time...');
+      const latestBlock = await provider.getBlock('latest');
+      const chainTimestamp = latestBlock.timestamp;
+      const jsTimestamp = Math.floor(Date.now() / 1000);
+
+      console.log('=== Time Debug ===');
+      console.log('Chain block.timestamp:', chainTimestamp);
+      console.log('JS Date.now():', jsTimestamp);
+      console.log('Chain is ahead by (seconds):', chainTimestamp - jsTimestamp);
+      console.log('==================');
+
+      // Convert selected dates to Unix timestamps
       const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
       const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
-      const nowTimestamp = Math.floor(Date.now() / 1000);
 
-      if (startTimestamp <= nowTimestamp) {
-        setValidationError('Start time must be in the future');
+      console.log('=== Booking Debug ===');
+      console.log('pricePerDay raw:', equipment.pricePerDay, typeof equipment.pricePerDay);
+      console.log('totalCost in Wei:', totalCost.toString());
+      console.log('totalCost in POL:', ethers.formatEther(totalCost));
+      console.log('startTimestamp:', startTimestamp);
+      console.log('endTimestamp:', endTimestamp);
+      console.log('equipmentId:', equipment.id);
+      console.log('=====================');
+
+      // ✅ Validate against CHAIN time, not JS time
+      if (startTimestamp <= chainTimestamp) {
+        const chainDate = new Date(chainTimestamp * 1000).toLocaleString();
+        setValidationError(
+          `Start time must be after blockchain time (${chainDate}). Please select a later time.`
+        );
         return;
       }
 
@@ -94,51 +138,18 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         return;
       }
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
       const gasOverrides = await getGasOverrides(provider);
-
-      const tokenAddress = process.env.REACT_APP_TEST_TOKEN_ADDRESS;
-
-      if (!tokenAddress) {
-        setValidationError('Token address not configured. Check your .env file.');
-        return;
-      }
-
-      const tokenABI = [
-        "function approve(address spender, uint256 amount) public returns (bool)",
-        "function allowance(address owner, address spender) public view returns (uint256)"
-      ];
-
-      const tokenContract = new ethers.Contract(tokenAddress, tokenABI, signer);
-      const costInWei = ethers.parseEther(totalCost.toString());
-      const userAddress = await signer.getAddress();
-
-      const currentAllowance = await tokenContract.allowance(userAddress, contractAddress);
-
-      if (currentAllowance < costInWei) {
-        setApproving(true);
-        setStatusMsg('Step 1/2: Approving token spending...');
-
-        const approveTx = await tokenContract.approve(
-          contractAddress,
-          costInWei,
-          gasOverrides
-        );
-        await approveTx.wait();
-
-        setApproving(false);
-        setStatusMsg('✅ Approved! Step 2/2: Creating booking...');
-      } else {
-        setStatusMsg('Creating booking...');
-      }
+      setStatusMsg('Confirm the transaction in MetaMask...');
 
       const tx = await write(
         'createBooking',
         equipment.id,
         startTimestamp,
         endTimestamp,
-        gasOverrides
+        {
+          ...gasOverrides,
+          value: totalCost,
+        }
       );
 
       if (tx) {
@@ -147,20 +158,37 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
         onSuccess();
       }
     } catch (err) {
-      setApproving(false);
       setStatusMsg('');
-      setValidationError(err.reason || err.message || 'Booking failed');
-      console.error('Booking error:', err);
+      const errorMsg = err.reason || err.message || 'Booking failed';
+      setValidationError(errorMsg);
+      console.error('Booking error:', {
+        message: errorMsg,
+        error: err,
+        totalCost: totalCost?.toString(),
+        equipment: equipment,
+      });
     }
   };
-
-  const isLoading = loading || approving;
 
   const getRentalDuration = () => {
     if (!startDate || !endDate) return null;
     const hours = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60));
     const days = Math.ceil(hours / 24);
     return `${hours} hours (${days} day${days > 1 ? 's' : ''})`;
+  };
+
+  const formatPrice = () => {
+    try {
+      if (typeof equipment.pricePerDay === 'string') {
+        return parseFloat(equipment.pricePerDay).toFixed(4);
+      }
+      if (typeof equipment.pricePerDay === 'bigint') {
+        return parseFloat(ethers.formatEther(equipment.pricePerDay)).toFixed(4);
+      }
+      return parseFloat(ethers.formatEther(BigInt(equipment.pricePerDay.toString()))).toFixed(4);
+    } catch {
+      return '0.0000';
+    }
   };
 
   return (
@@ -173,8 +201,10 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
         <div className="modal-body">
           <div className="booking-info">
-            <p><strong>Price:</strong> {equipment.pricePerDay} MATIC/day</p>
-            <p><strong>Owner:</strong> {equipment.owner?.slice(0, 8)}...{equipment.owner?.slice(-6)}</p>
+            <p><strong>Price:</strong> {formatPrice()} POL/day</p>
+            <p>
+              <strong>Owner:</strong> {equipment.owner?.slice(0, 8)}...{equipment.owner?.slice(-6)}
+            </p>
           </div>
 
           <div className="form-group">
@@ -207,33 +237,31 @@ const BookingModal = ({ equipment, contractAddress, contractABI, onClose, onSucc
 
           {totalCost > 0 && (
             <div className="cost-summary">
-              <p><strong>Total Cost:</strong> {totalCost.toFixed(4)} MATIC</p>
+              <p>
+                <strong>Total Cost:</strong>{' '}
+                {typeof totalCost === 'bigint'
+                  ? parseFloat(ethers.formatEther(totalCost)).toFixed(4)
+                  : parseFloat(totalCost).toFixed(4)
+                } POL
+              </p>
             </div>
           )}
 
-          {statusMsg && (
-            <div className="status-message">{statusMsg}</div>
-          )}
-
-          {validationError && (
-            <div className="error-message">{validationError}</div>
-          )}
-
-          {error && !validationError && (
-            <div className="error-message">{error}</div>
-          )}
+          {statusMsg && <div className="status-message">{statusMsg}</div>}
+          {validationError && <div className="error-message">{validationError}</div>}
+          {error && !validationError && <div className="error-message">{error}</div>}
         </div>
 
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose} disabled={isLoading}>
+          <button className="btn-cancel" onClick={onClose} disabled={loading}>
             Cancel
           </button>
           <button
             className="btn-confirm"
             onClick={handleBooking}
-            disabled={isLoading || !startDate || !endDate || totalCost <= 0}
+            disabled={loading || !startDate || !endDate || totalCost <= 0}
           >
-            {approving ? '⏳ Approving...' : loading ? '⏳ Booking...' : 'Confirm Booking'}
+            {loading ? '⏳ Booking...' : 'Confirm Booking'}
           </button>
         </div>
       </div>

@@ -92,7 +92,7 @@ const AddEquipmentModal = ({ contractAddress, contractABI, onClose, onSuccess })
           </div>
 
           <div className="form-group">
-            <label htmlFor="price">Price per Day (MATIC) *</label>
+            <label htmlFor="price">Price per Day (POL) *</label>
             <input
               id="price"
               type="number"
